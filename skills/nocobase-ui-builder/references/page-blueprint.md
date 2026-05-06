@@ -2,7 +2,7 @@
 
 This file defines the simplified public page-structure JSON blueprint used by `applyBlueprint`.
 
-Canonical front door is `nb api flow-surfaces apply-blueprint`. This file owns the inner page document only; for nb raw body details, always read [tool-shapes.md](./tool-shapes.md). For reusable popup / block / fields planning, read [templates.md](./templates.md) instead of restating that matrix here.
+Agent-facing front door is `node skills/nocobase-ui-builder/runtime/bin/nb-flow-surfaces.mjs apply-blueprint`. This file owns the inner page document only; for wrapper raw body details, always read [tool-shapes.md](./tool-shapes.md). For reusable popup / block / fields planning, read [templates.md](./templates.md) instead of restating that matrix here.
 
 ## 1. Core Rules
 
@@ -11,6 +11,7 @@ Canonical front door is `nb api flow-surfaces apply-blueprint`. This file owns t
 - `version` stays `"1"`.
 - `mode` is either `"create"` or `"replace"`.
 - `create` creates a new menu item + page.
+- For duplicate-page prevention, page identity is `(navigation.group.routeId, page.title)`, after resolving a unique `navigation.group.title` to routeId. In `create`, same group + same page title may be prepared as `replace` with `target.pageSchemaUid`; different group + same page title does not merge, reuse, or auto-replace another page.
 - In `create`, any newly created `navigation.group` and any top-level or second-level `navigation.item` must include one valid semantic Ant Design icon.
 - `replace` rewrites one existing page and therefore requires `target.pageSchemaUid`.
 - In `replace`, omitted page-level fields are left unchanged.
@@ -145,6 +146,7 @@ Envelope boundary:
 - Every involved direct collection always uses top-level `defaults.collections.<collection>.popups.view/addNew/edit.{name,description}`, and any `table` block always pulls that collection into the `addNew` threshold evaluation even when the blueprint omitted an explicit `addNew` opener.
 - Use top-level `defaults.collections.<collection>.fieldGroups` as collection-level candidate groups for backend-generated `details`, `createForm`, and `editForm` popup content only when one of those fixed popup scenes should still have more than 10 effective fields after scene filtering.
 - Generate these groups from live collection metadata only for large generated popups. For 10 or fewer effective fields, omit `defaults.collections.<collection>.fieldGroups` and let the backend keep a flat popup.
+- After generating defaults fieldGroups, run one compact self-review with a short structured verdict (`approve` or `regenerate`) that checks semantic grouping, required-field coverage, group balance, and group title specificity. Use the lowest practical reasoning effort / no-think mode, do not ask for chain-of-thought, and if the verdict is `regenerate`, regenerate once from live metadata and stop after that single retry.
 - When using the prepare-write CLI with live metadata, missing `fieldGroups` for large generated popups is a hard validation error. The helper does not auto-generate generic groups; regenerate explicit semantic `fieldGroups` from the live fields, and make sure they cover every required generated-popup field.
 - Keep `fieldGroups` keyed only by target collection. If multiple relation paths land on the same target collection, reuse one collection entry; do not create per-association or per-popup `fieldGroups` branches.
 - The backend filters each group by scene: create/edit forms drop audit and non-writable fields; details can retain read-only/audit fields when displayable. Empty groups are omitted, but a provided small `fieldGroups` payload can still force divider-style generated forms, so do not emit it for small scenes.
@@ -226,7 +228,7 @@ Example:
 ### `navigation.item` semantics
 
 - In `create`, a new top-level or second-level `navigation.item` must include both `title` and `icon`.
-- When `navigation.item` is attached under one explicit existing `navigation.group.routeId`, keep `icon` by default; the local preview tolerates omission because it cannot prove whether that live target is already third-level or deeper.
+- When `navigation.item` is attached under one explicit existing `navigation.group.routeId`, keep `icon` by default; the local prepare-write gate tolerates omission because it cannot prove whether that live target is already third-level or deeper.
 - Replacing the page does not use `navigation.item` to mutate existing menu metadata.
 
 ## 3. Create Example

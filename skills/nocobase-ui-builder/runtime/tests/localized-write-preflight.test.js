@@ -178,6 +178,10 @@ function assertHasRule(result, ruleId, path) {
   assert.equal(result.errors.some((issue) => issue.ruleId === ruleId && (!path || issue.path === path)), true);
 }
 
+function actionTypes(actions) {
+  return actions.map((action) => (typeof action === 'string' ? action : action?.type));
+}
+
 function makeDirectLocalizedBody(operation, {
   type = 'table',
   collectionName = 'users',
@@ -232,6 +236,195 @@ test('runLocalizedWritePreflight fails add-block data surfaces that omit block-l
   assert.equal(result.ok, false);
   assertHasRule(result, 'public-data-surface-default-filter-required');
   assert.equal(result.facts.requiredCollections.includes('users'), true);
+});
+
+test('runLocalizedWritePreflight defaults record actions for direct table blocks', () => {
+  const result = runLocalizedWritePreflight({
+    operation: 'compose',
+    body: {
+      target: { uid: 'page-tab-uid' },
+      blocks: [
+        {
+          key: 'users-table',
+          type: 'table',
+          resource: {
+            dataSourceKey: 'main',
+            collectionName: 'users',
+          },
+          defaultFilter: makeDefaultFilter(['nickname', 'email', 'status']),
+        },
+      ],
+    },
+    collectionMetadata: makeMetadata(),
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(actionTypes(result.cliBody.blocks[0].recordActions), ['view', 'edit', 'delete']);
+});
+
+test('runLocalizedWritePreflight defaults record actions for nested popup table blocks', () => {
+  const result = runLocalizedWritePreflight({
+    operation: 'compose',
+    body: {
+      target: { uid: 'page-tab-uid' },
+      blocks: [
+        {
+          key: 'users-details',
+          type: 'details',
+          resource: {
+            dataSourceKey: 'main',
+            collectionName: 'users',
+          },
+          fields: ['nickname', 'email'],
+          actions: [
+            {
+              type: 'popup',
+              popup: {
+                blocks: [
+                  {
+                    key: 'roles-table',
+                    type: 'table',
+                    resource: {
+                      dataSourceKey: 'main',
+                      collectionName: 'roles',
+                    },
+                    defaultFilter: makeDefaultFilter(['name', 'title']),
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    },
+    collectionMetadata: makeMetadata(),
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(actionTypes(result.cliBody.blocks[0].actions[0].popup.blocks[0].recordActions), ['view', 'edit', 'delete']);
+});
+
+test('runLocalizedWritePreflight preserves explicit table record actions and skips table select models', () => {
+  const result = runLocalizedWritePreflight({
+    operation: 'compose',
+    body: {
+      target: { uid: 'page-tab-uid' },
+      blocks: [
+        {
+          key: 'users-table',
+          type: 'table',
+          resource: {
+            dataSourceKey: 'main',
+            collectionName: 'users',
+          },
+          defaultFilter: makeDefaultFilter(['nickname', 'email', 'status']),
+          recordActions: [{ type: 'view' }],
+        },
+        {
+          key: 'users-selector',
+          type: 'table',
+          use: 'TableSelectModel',
+          resource: {
+            dataSourceKey: 'main',
+            collectionName: 'users',
+          },
+          defaultFilter: makeDefaultFilter(['nickname', 'email', 'status']),
+        },
+      ],
+    },
+    collectionMetadata: makeMetadata(),
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(actionTypes(result.cliBody.blocks[0].recordActions), ['view']);
+  assert.equal(Object.hasOwn(result.cliBody.blocks[1], 'recordActions'), false);
+});
+
+test('runLocalizedWritePreflight does not default record actions during configure', () => {
+  const result = runLocalizedWritePreflight({
+    operation: 'configure',
+    body: {
+      target: { uid: 'users-table-uid' },
+      changes: {
+        fields: ['nickname'],
+      },
+    },
+    collectionMetadata: makeMetadata(),
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result.errors));
+  assert.equal(Object.hasOwn(result.cliBody.changes, 'recordActions'), false);
+});
+
+test('runLocalizedWritePreflight skips template-backed and popup subtable model table defaults', () => {
+  const result = runLocalizedWritePreflight({
+    operation: 'compose',
+    body: {
+      target: { uid: 'page-tab-uid' },
+      blocks: [
+        {
+          key: 'template-table',
+          type: 'table',
+          template: { uid: 'users-table-template' },
+          resource: {
+            dataSourceKey: 'main',
+            collectionName: 'users',
+          },
+        },
+        {
+          key: 'popup-subtable-field',
+          type: 'table',
+          use: 'PopupSubTableFieldModel',
+          resource: {
+            dataSourceKey: 'main',
+            collectionName: 'roles',
+          },
+          defaultFilter: makeDefaultFilter(['name', 'title']),
+        },
+        {
+          key: 'popup-subtable-actions',
+          type: 'table',
+          use: 'PopupSubTableActionsColumnModel',
+          resource: {
+            dataSourceKey: 'main',
+            collectionName: 'roles',
+          },
+          defaultFilter: makeDefaultFilter(['name', 'title']),
+        },
+      ],
+    },
+    collectionMetadata: makeMetadata(),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(Object.hasOwn(result.cliBody.blocks[0], 'recordActions'), false);
+  assert.equal(Object.hasOwn(result.cliBody.blocks[1], 'recordActions'), false);
+  assert.equal(Object.hasOwn(result.cliBody.blocks[2], 'recordActions'), false);
+});
+
+test('runLocalizedWritePreflight defaults record actions for table blocks with empty template metadata', () => {
+  const result = runLocalizedWritePreflight({
+    operation: 'compose',
+    body: {
+      target: { uid: 'page-tab-uid' },
+      blocks: [
+        {
+          key: 'users-table',
+          type: 'table',
+          template: {},
+          resource: {
+            dataSourceKey: 'main',
+            collectionName: 'users',
+          },
+          defaultFilter: makeDefaultFilter(['nickname', 'email', 'status']),
+        },
+      ],
+    },
+    collectionMetadata: makeMetadata(),
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(actionTypes(result.cliBody.blocks[0].recordActions), ['view', 'edit', 'delete']);
 });
 
 test('runLocalizedWritePreflight fails localized writes that use empty block-level defaultFilter on direct data surfaces', () => {
@@ -376,6 +569,7 @@ test('runLocalizedWritePreflight accepts flat relation fieldType and rejects int
       },
       roles: {
         name: 'roles',
+        titleField: 'name',
         fields: [
           { name: 'title', interface: 'input' },
           { name: 'name', interface: 'input' },
@@ -428,6 +622,524 @@ test('runLocalizedWritePreflight accepts flat relation fieldType and rejects int
   });
   assert.equal(invalid.ok, false);
   assert.equal(invalid.errors.some((item) => item.ruleId === 'internal-field-keys-not-public'), true);
+});
+
+test('runLocalizedWritePreflight requires explicit titleField for relation fieldType objects when target collection titleField is id', () => {
+  const metadata = makeMetadata();
+  metadata.collections.roles.titleField = 'id';
+
+  const composeMissing = runLocalizedWritePreflight({
+    operation: 'compose',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'tab-uid' },
+      blocks: [
+        {
+          key: 'form',
+          type: 'createForm',
+          resource: { dataSourceKey: 'main', collectionName: 'users' },
+          fields: [
+            {
+              field: 'roles',
+              fieldType: 'popupSubTable',
+              fields: ['name', 'title'],
+            },
+          ],
+        },
+      ],
+    },
+  });
+  assert.equal(composeMissing.ok, false);
+  assertHasRule(
+    composeMissing,
+    'relation-field-title-field-required-when-collection-title-is-id',
+    '$.blocks[0].fields[0].titleField',
+  );
+
+  const composeExplicitReadable = runLocalizedWritePreflight({
+    operation: 'compose',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'tab-uid' },
+      blocks: [
+        {
+          key: 'form',
+          type: 'createForm',
+          resource: { dataSourceKey: 'main', collectionName: 'users' },
+          fields: [
+            {
+              field: 'roles',
+              fieldType: 'popupSubTable',
+              titleField: 'name',
+              fields: ['name', 'title'],
+            },
+          ],
+        },
+      ],
+    },
+  });
+  assert.equal(composeExplicitReadable.ok, true, JSON.stringify(composeExplicitReadable.errors));
+
+  const configureMissing = runLocalizedWritePreflight({
+    operation: 'configure',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'users-table-uid' },
+      changes: {
+        fields: [
+          {
+            field: 'roles',
+            fieldType: 'popupSubTable',
+            fields: ['name', 'title'],
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(configureMissing.ok, false);
+  assertHasRule(
+    configureMissing,
+    'relation-field-title-field-required-when-collection-title-is-id',
+    '$.changes.fields[0].titleField',
+  );
+
+  const explicitId = runLocalizedWritePreflight({
+    operation: 'configure',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'users-table-uid' },
+      changes: {
+        fields: [
+          {
+            field: 'roles',
+            fieldType: 'popupSubTable',
+            titleField: 'id',
+            fields: ['name', 'title'],
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(explicitId.ok, false);
+  assertHasRule(
+    explicitId,
+    'relation-field-title-field-id-forbidden',
+    '$.changes.fields[0].titleField',
+  );
+
+  const invalidExplicit = runLocalizedWritePreflight({
+    operation: 'configure',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'users-table-uid' },
+      changes: {
+        fields: [
+          {
+            field: 'roles',
+            fieldType: 'popupSubTable',
+            titleField: 'summary',
+            fields: ['name', 'title'],
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(invalidExplicit.ok, false);
+  assertHasRule(
+    invalidExplicit,
+    'relation-field-title-field-invalid',
+    '$.changes.fields[0].titleField',
+  );
+});
+
+test('runLocalizedWritePreflight requires explicit titleField for relation fieldType objects when target collection titleField falls back to id', () => {
+  const metadata = makeMetadata();
+
+  const composeMissing = runLocalizedWritePreflight({
+    operation: 'compose',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'tab-uid' },
+      blocks: [
+        {
+          key: 'form',
+          type: 'createForm',
+          resource: { dataSourceKey: 'main', collectionName: 'users' },
+          fields: [
+            {
+              field: 'roles',
+              fieldType: 'popupSubTable',
+              fields: ['name', 'title'],
+            },
+          ],
+        },
+      ],
+    },
+  });
+  assert.equal(composeMissing.ok, false);
+  assertHasRule(
+    composeMissing,
+    'relation-field-title-field-required-when-collection-title-is-id',
+    '$.blocks[0].fields[0].titleField',
+  );
+
+  const configureExplicitId = runLocalizedWritePreflight({
+    operation: 'configure',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'users-table-uid' },
+      changes: {
+        fields: [
+          {
+            field: 'roles',
+            fieldType: 'popupSubTable',
+            titleField: 'id',
+            fields: ['name', 'title'],
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(configureExplicitId.ok, false);
+  assertHasRule(
+    configureExplicitId,
+    'relation-field-title-field-id-forbidden',
+    '$.changes.fields[0].titleField',
+  );
+});
+
+test('runLocalizedWritePreflight requires explicit titleField for popup-only relation fields when target collection titleField is id', () => {
+  const metadata = makeMetadata();
+  metadata.collections.roles.titleField = 'id';
+
+  const composeMissing = runLocalizedWritePreflight({
+    operation: 'compose',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'tab-uid' },
+      blocks: [
+        {
+          key: 'usersTable',
+          type: 'table',
+          resource: { dataSourceKey: 'main', collectionName: 'users' },
+          defaultFilter: makeDefaultFilter(['nickname', 'email', 'status']),
+          fields: [
+            {
+              field: 'roles',
+              popup: {
+                blocks: [
+                  {
+                    key: 'roleDetails',
+                    type: 'details',
+                    resource: { binding: 'currentRecord', collectionName: 'roles' },
+                    fields: ['name', 'title'],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    },
+  });
+  assert.equal(composeMissing.ok, false);
+  assertHasRule(
+    composeMissing,
+    'relation-field-title-field-required-when-collection-title-is-id',
+    '$.blocks[0].fields[0].titleField',
+  );
+
+  const configureExplicitReadable = runLocalizedWritePreflight({
+    operation: 'configure',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'users-table-uid' },
+      changes: {
+        fields: [
+          {
+            field: 'roles',
+            titleField: 'name',
+            popup: {
+              blocks: [
+                {
+                  key: 'roleDetails',
+                  type: 'details',
+                  resource: { binding: 'currentRecord', collectionName: 'roles' },
+                  fields: ['name', 'title'],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(configureExplicitReadable.ok, true, JSON.stringify(configureExplicitReadable.errors));
+});
+
+test('runLocalizedWritePreflight keeps relation titleField guard inside inherited relation popup surface context', () => {
+  const metadata = makeMetadata();
+  metadata.collections.departments.titleField = 'id';
+  metadata.collections.roles.fields.push({
+    name: 'department',
+    interface: 'm2o',
+    type: 'belongsTo',
+    target: 'departments',
+  });
+
+  const composeMissing = runLocalizedWritePreflight({
+    operation: 'compose',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'tab-uid' },
+      blocks: [
+        {
+          key: 'usersTable',
+          type: 'table',
+          resource: { dataSourceKey: 'main', collectionName: 'users' },
+          defaultFilter: makeDefaultFilter(['nickname', 'email', 'status']),
+          fields: [
+            {
+              field: 'roles',
+              titleField: 'name',
+              popup: {
+                blocks: [
+                  {
+                    key: 'roleDetails',
+                    type: 'details',
+                    resource: { binding: 'currentRecord' },
+                    fields: [
+                      {
+                        field: 'department',
+                        fieldType: 'popupSubTable',
+                        fields: ['title'],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    },
+  });
+  assert.equal(composeMissing.ok, false);
+  assertHasRule(
+    composeMissing,
+    'relation-field-title-field-required-when-collection-title-is-id',
+    '$.blocks[0].fields[0].popup.blocks[0].fields[0].titleField',
+  );
+
+  const composeExplicitReadable = runLocalizedWritePreflight({
+    operation: 'compose',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'tab-uid' },
+      blocks: [
+        {
+          key: 'usersTable',
+          type: 'table',
+          resource: { dataSourceKey: 'main', collectionName: 'users' },
+          defaultFilter: makeDefaultFilter(['nickname', 'email', 'status']),
+          fields: [
+            {
+              field: 'roles',
+              titleField: 'name',
+              popup: {
+                blocks: [
+                  {
+                    key: 'roleDetails',
+                    type: 'details',
+                    resource: { binding: 'currentRecord' },
+                    fields: [
+                      {
+                        field: 'department',
+                        fieldType: 'popupSubTable',
+                        titleField: 'title',
+                        fields: ['title'],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    },
+  });
+  assert.equal(composeExplicitReadable.ok, true, JSON.stringify(composeExplicitReadable.errors));
+
+  const configureMissing = runLocalizedWritePreflight({
+    operation: 'configure',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'users-table-uid' },
+      changes: {
+        fields: [
+          {
+            field: 'roles',
+            titleField: 'name',
+            popup: {
+              blocks: [
+                {
+                  key: 'roleDetails',
+                  type: 'details',
+                  resource: { binding: 'currentRecord' },
+                  fields: [
+                    {
+                      field: 'department',
+                      fieldType: 'popupSubTable',
+                      fields: ['title'],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(configureMissing.ok, false);
+  assertHasRule(
+    configureMissing,
+    'relation-field-title-field-required-when-collection-title-is-id',
+    '$.changes.fields[0].popup.blocks[0].fields[0].titleField',
+  );
+
+  const configureExplicitId = runLocalizedWritePreflight({
+    operation: 'configure',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'users-table-uid' },
+      changes: {
+        fields: [
+          {
+            field: 'roles',
+            titleField: 'name',
+            popup: {
+              blocks: [
+                {
+                  key: 'roleDetails',
+                  type: 'details',
+                  resource: { binding: 'currentRecord' },
+                  fields: [
+                    {
+                      field: 'department',
+                      fieldType: 'popupSubTable',
+                      titleField: 'id',
+                      fields: ['title'],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(configureExplicitId.ok, false);
+  assertHasRule(
+    configureExplicitId,
+    'relation-field-title-field-id-forbidden',
+    '$.changes.fields[0].popup.blocks[0].fields[0].titleField',
+  );
+});
+
+test('runLocalizedWritePreflight keeps relation titleField guard inside inherited relation popup surface context when target titleField falls back to id', () => {
+  const metadata = makeMetadata();
+  metadata.collections.roles.fields.push({
+    name: 'department',
+    interface: 'm2o',
+    type: 'belongsTo',
+    target: 'departments',
+  });
+
+  const composeMissing = runLocalizedWritePreflight({
+    operation: 'compose',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'tab-uid' },
+      blocks: [
+        {
+          key: 'usersTable',
+          type: 'table',
+          resource: { dataSourceKey: 'main', collectionName: 'users' },
+          defaultFilter: makeDefaultFilter(['nickname', 'email', 'status']),
+          fields: [
+            {
+              field: 'roles',
+              titleField: 'name',
+              popup: {
+                blocks: [
+                  {
+                    key: 'roleDetails',
+                    type: 'details',
+                    resource: { binding: 'currentRecord' },
+                    fields: [
+                      {
+                        field: 'department',
+                        fieldType: 'popupSubTable',
+                        fields: ['title'],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    },
+  });
+  assert.equal(composeMissing.ok, false);
+  assertHasRule(
+    composeMissing,
+    'relation-field-title-field-required-when-collection-title-is-id',
+    '$.blocks[0].fields[0].popup.blocks[0].fields[0].titleField',
+  );
+
+  const configureExplicitId = runLocalizedWritePreflight({
+    operation: 'configure',
+    collectionMetadata: metadata,
+    body: {
+      target: { uid: 'users-table-uid' },
+      changes: {
+        fields: [
+          {
+            field: 'roles',
+            titleField: 'name',
+            popup: {
+              blocks: [
+                {
+                  key: 'roleDetails',
+                  type: 'details',
+                  resource: { binding: 'currentRecord' },
+                  fields: [
+                    {
+                      field: 'department',
+                      fieldType: 'popupSubTable',
+                      titleField: 'id',
+                      fields: ['title'],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(configureExplicitId.ok, false);
+  assertHasRule(
+    configureExplicitId,
+    'relation-field-title-field-id-forbidden',
+    '$.changes.fields[0].popup.blocks[0].fields[0].titleField',
+  );
 });
 
 test('runLocalizedWritePreflight preserves canonicalized cliBody and localized facts', () => {
@@ -527,6 +1239,64 @@ test('runLocalizedWritePreflight rejects chart settings displayTitle before remo
   assert.equal(result.ok, false);
   assert.ok(result.errors.some((issue) => issue.ruleId === 'chart-display-title-unsupported'));
   assert.equal(result.cliBody.settings.displayTitle, true);
+});
+
+test('runLocalizedWritePreflight rejects add-block chart builder relation query paths', () => {
+  const result = runLocalizedWritePreflight({
+    operation: 'add-block',
+    body: {
+      target: { uid: 'grid-uid' },
+      type: 'chart',
+      settings: {
+        title: 'Department chart',
+        query: {
+          mode: 'builder',
+          resource: { dataSourceKey: 'main', collectionName: 'users' },
+          measures: [{ field: 'id', aggregation: 'count', alias: 'user_count' }],
+          dimensions: [{ field: ['department', 'title'], alias: 'department_title' }],
+        },
+        visual: {
+          mode: 'basic',
+          type: 'bar',
+          mappings: { x: 'department_title', y: 'user_count' },
+        },
+      },
+    },
+    collectionMetadata: makeMetadata(),
+  });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, 'chart-builder-relation-field-runtime-unsupported', '$.settings.query.dimensions[0].field');
+});
+
+test('runLocalizedWritePreflight accepts scalar builder chart query paths', () => {
+  const result = runLocalizedWritePreflight({
+    operation: 'add-block',
+    body: {
+      target: { uid: 'grid-uid' },
+      type: 'chart',
+      settings: {
+        title: 'Department chart',
+        query: {
+          mode: 'builder',
+          resource: { dataSourceKey: 'main', collectionName: 'users' },
+          measures: [{ field: 'id', aggregation: 'count', alias: 'user_count' }],
+          dimensions: [{ field: 'department_id', alias: 'department_id' }],
+        },
+        visual: {
+          mode: 'basic',
+          type: 'bar',
+          mappings: { x: 'department_id', y: 'user_count' },
+        },
+      },
+    },
+    collectionMetadata: makeMetadata(),
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.cliBody.settings.query.dimensions, [
+    { field: 'department_id', alias: 'department_id' },
+  ]);
 });
 
 test('runLocalizedWritePreflight accepts gridCard settings.columns and rejects unsupported gridCard setting keys', () => {
@@ -905,6 +1675,7 @@ test('runLocalizedWritePreflight validates and normalizes relation field popup r
             'nickname',
             {
               field: 'roles',
+              titleField: 'name',
               popup: {
                 blocks: [
                   {
@@ -945,6 +1716,7 @@ test('runLocalizedWritePreflight validates and normalizes relation field popup r
           fields: [
             {
               field: 'roles',
+              titleField: 'name',
               popup: {
                 blocks: [
                   {
@@ -982,6 +1754,7 @@ test('runLocalizedWritePreflight validates and normalizes relation field popup r
           fields: [
             {
               field: 'roles',
+              titleField: 'name',
               popup: {
                 blocks: [
                   {
@@ -2503,6 +3276,27 @@ test('runLocalizedWritePreflight validates configure chart displayTitle against 
   });
   assert.equal(result.ok, false);
   assertHasRule(result, 'chart-display-title-unsupported', '$.changes.displayTitle');
+});
+
+test('runLocalizedWritePreflight rejects configure chart builder relation query paths against live target context', () => {
+  const result = runLocalizedWritePreflight({
+    operation: 'configure',
+    body: {
+      target: { uid: 'chart-block-uid' },
+      changes: {
+        query: {
+          mode: 'builder',
+          resource: { dataSourceKey: 'main', collectionName: 'users' },
+          measures: [{ field: 'id', aggregation: 'count', alias: 'user_count' }],
+          dimensions: [{ field: 'department.title', alias: 'department_title' }],
+        },
+      },
+    },
+    collectionMetadata: makeMetadata(),
+  });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, 'chart-builder-relation-field-runtime-unsupported', '$.changes.query.dimensions[0].field');
 });
 
 test('runLocalizedWritePreflight validates hidden popup descendant main-block sections and chart displayTitle', () => {

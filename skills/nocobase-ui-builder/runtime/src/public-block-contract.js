@@ -37,6 +37,21 @@ const HIDDEN_POPUP_SETTINGS_BY_BLOCK_TYPE = new Map([
     ],
   ],
 ]);
+const READABLE_RELATION_DISPLAY_FIELD_NAMES = new Set([
+  'name',
+  'title',
+  'nickname',
+  'username',
+  'email',
+  'phone',
+  'label',
+  'code',
+  'subject',
+  'category',
+  'scope',
+  'priority',
+  'description',
+]);
 
 function normalizeText(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : '';
@@ -48,6 +63,14 @@ function normalizeLowerText(value) {
 
 function hasOwn(target, key) {
   return isPlainObject(target) && Object.prototype.hasOwnProperty.call(target, key);
+}
+
+function isReadableDisplayFieldMeta(field) {
+  if (!isPlainObject(field) || isAssociationFieldMeta(field)) {
+    return false;
+  }
+  const fieldName = normalizeText(field.name || field.field || field.key);
+  return !!fieldName && fieldName !== 'id' && !!normalizeText(field.interface);
 }
 
 function normalizeFilterTargetKeyValue(value) {
@@ -319,4 +342,110 @@ export function resolvePublicFieldPathInCollectionMetadata(collectionMetadata, c
 
 export function isPublicAssociationFieldMeta(field) {
   return isAssociationFieldMeta(field);
+}
+
+export const PUBLIC_RELATION_FIELD_TITLE_FIELD_REQUIRED_RULE_ID = 'relation-field-title-field-required-when-collection-title-is-id';
+export const PUBLIC_RELATION_FIELD_TITLE_FIELD_FORBIDDEN_RULE_ID = 'relation-field-title-field-id-forbidden';
+export const PUBLIC_RELATION_FIELD_TITLE_FIELD_INVALID_RULE_ID = 'relation-field-title-field-invalid';
+
+export function getPublicRelationFieldObjectPath(item) {
+  if (typeof item === 'string') {
+    return normalizeText(item);
+  }
+  return normalizeText(item?.field || item?.fieldPath);
+}
+
+export function buildPublicRelationFieldTitleFieldRequiredMessage(fieldPath, targetCollection, readableDisplayFieldName = '') {
+  const normalizedFieldPath = normalizeText(fieldPath) || '(unknown field)';
+  const normalizedTargetCollection = normalizeText(targetCollection) || '(unknown collection)';
+  const readableField = normalizeText(readableDisplayFieldName);
+  if (readableField) {
+    return `Relation field "${normalizedFieldPath}" targets collection "${normalizedTargetCollection}" whose display field would resolve to "id". You must explicitly set titleField on this relation field object. Use "${readableField}" or another readable field; "id" is not allowed.`;
+  }
+  return `Relation field "${normalizedFieldPath}" targets collection "${normalizedTargetCollection}" whose display field would resolve to "id". You must explicitly set titleField on this relation field object and add a readable display field to the target collection. "id" is not allowed.`;
+}
+
+export function resolveReadableDisplayFieldName(collectionMetadata, collectionName) {
+  const collectionMeta = getCollectionMeta(collectionMetadata, collectionName);
+  if (!collectionMeta || !Array.isArray(collectionMeta.fields)) {
+    return '';
+  }
+
+  const fieldsByName = collectionMeta.fieldsByName instanceof Map ? collectionMeta.fieldsByName : new Map();
+  const candidates = [
+    normalizeText(collectionMeta.titleField),
+    normalizeText(collectionMeta.filterTargetKey),
+    ...READABLE_RELATION_DISPLAY_FIELD_NAMES,
+  ];
+
+  const seen = new Set();
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizeText(candidate);
+    if (!normalizedCandidate || seen.has(normalizedCandidate)) {
+      continue;
+    }
+    seen.add(normalizedCandidate);
+    const fieldMeta = fieldsByName.get(normalizedCandidate) || fieldsByName.get(normalizedCandidate.toLowerCase()) || null;
+    if (isReadableDisplayFieldMeta(fieldMeta)) {
+      return normalizeText(fieldMeta.name || fieldMeta.field || fieldMeta.key);
+    }
+  }
+
+  for (const field of collectionMeta.fields) {
+    if (isReadableDisplayFieldMeta(field)) {
+      return normalizeText(field.name || field.field || field.key);
+    }
+  }
+
+  return '';
+}
+
+export function buildPublicRelationFieldTitleFieldInvalidMessage(fieldPath, targetCollection, titleField) {
+  const normalizedFieldPath = normalizeText(fieldPath) || '(unknown field)';
+  const normalizedTargetCollection = normalizeText(targetCollection) || '(unknown collection)';
+  const normalizedTitleField = normalizeText(titleField) || '(empty)';
+  return `Relation field "${normalizedFieldPath}" on collection "${normalizedTargetCollection}" cannot use titleField "${normalizedTitleField}". Choose a readable field such as "name", "title", or "code".`;
+}
+
+export function buildPublicRelationFieldTitleFieldInvalidTargetMessage(fieldPath, targetCollection, titleField) {
+  const normalizedFieldPath = normalizeText(fieldPath) || '(unknown field)';
+  const normalizedTargetCollection = normalizeText(targetCollection) || '(unknown collection)';
+  const normalizedTitleField = normalizeText(titleField) || '(empty)';
+  return `Relation field "${normalizedFieldPath}" on collection "${normalizedTargetCollection}" cannot use titleField "${normalizedTitleField}" because the target collection does not expose that field.`;
+}
+
+export function getPublicRelationFieldTitleFieldRequirement(collectionMetadata, sourceCollectionName, fieldPath) {
+  const normalizedSourceCollectionName = normalizeText(sourceCollectionName);
+  const normalizedFieldPath = normalizeText(fieldPath);
+  if (!normalizedSourceCollectionName || !normalizedFieldPath || normalizedFieldPath.includes('.')) {
+    return null;
+  }
+
+  const resolved = resolveFieldPathInCollectionMetadata(
+    collectionMetadata,
+    normalizedSourceCollectionName,
+    normalizedFieldPath,
+  );
+  if (!isAssociationFieldMeta(resolved?.field)) {
+    return null;
+  }
+
+  const targetCollection = normalizeText(resolved?.field?.target);
+  if (!targetCollection) {
+    return null;
+  }
+
+  const targetCollectionMeta = getCollectionMeta(collectionMetadata, targetCollection);
+  const effectiveTargetCollectionTitleField = normalizeLowerText(targetCollectionMeta?.titleField) || 'id';
+  if (effectiveTargetCollectionTitleField !== 'id') {
+    return null;
+  }
+
+  return {
+    sourceCollection: normalizedSourceCollectionName,
+    relationField: normalizeText(resolved?.field?.name) || normalizedFieldPath,
+    targetCollection,
+    targetCollectionTitleField: normalizeText(targetCollectionMeta?.titleField) || 'id',
+    readableDisplayFieldName: resolveReadableDisplayFieldName(collectionMetadata, targetCollection),
+  };
 }

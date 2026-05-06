@@ -6,21 +6,21 @@ Do not open this file until you are preparing the real nb body. For the common l
 
 Use it with:
 
-- [cli-command-surface.md](./cli-command-surface.md) for canonical nb API families
-- [transport-crosswalk.md](./transport-crosswalk.md) for the nb API family
+- [cli-command-surface.md](./cli-command-surface.md) for canonical wrapper families
+- [transport-crosswalk.md](./transport-crosswalk.md) for the wrapper family
 - [page-blueprint.md](./page-blueprint.md), [reaction.md](./reaction.md), and [templates.md](./templates.md) for business-object rules and template planning
 
-Canonical front door is `nb api flow-surfaces`. Use this file for the nb request body / locator shape you actually send.
+Canonical front door is `node skills/nocobase-ui-builder/runtime/bin/nb-flow-surfaces.mjs`. Use this file for the raw business object / locator shape passed through the wrapper.
 
 ## 0. Global Rule
 
-- `nb api flow-surfaces get` is the common exception: it uses top-level locator flags and no JSON body.
+- wrapper `get` is the common exception: it uses top-level locator flags and no JSON body.
 - Most other body-based `flow-surfaces` commands take the raw business object through CLI `--body` / `--body-file`.
 - Never stringify the business object.
 - Never add an outer `{ values: ... }` wrapper.
 - Never invent the literal `"root"` as `target.uid` / `locator.uid`; use a real uid from live readback.
 - For `applyBlueprint`, the nb request body is one page blueprint business object. On a first whole-page write that already ran `prepare-write`, that means `result.cliBody`, not the original draft blueprint. The helper stays local/read-only; the later transport step must send only that prepared object. Do not wrap it again.
-- For whole-page `applyBlueprint`, recompute the involved target collections from live metadata and rebuild top-level `defaults.collections` from scratch on each draft. Every involved direct collection keeps fixed `popups.view` / `addNew` / `edit` `{ name, description }` descriptors there, `defaults.collections.<collection>.fieldGroups` stays only on the target collection when a fixed generated popup scene should still have more than 10 effective fields, `table` blocks always pull their collection into the `addNew` threshold evaluation, and relation popup naming stays under `popups.associations` keyed only by the first relation segment; do not send `defaults.blocks` or popup-default content/layout.
+- For whole-page `applyBlueprint`, recompute the involved target collections from live metadata and rebuild top-level `defaults.collections` from scratch on each draft. Every involved direct collection keeps fixed `popups.view` / `addNew` / `edit` `{ name, description }` descriptors there, `defaults.collections.<collection>.fieldGroups` stays only on the target collection when a fixed generated popup scene should still have more than 10 effective fields, `table` blocks always pull their collection into the `addNew` threshold evaluation, and relation popup naming stays under `popups.associations` keyed only by the first relation segment; do not send `defaults.blocks` or popup-default content/layout. After generating defaults fieldGroups, run one compact self-review with a short structured verdict (`approve` or `regenerate`), using the lowest practical reasoning effort / no-think mode and no chain-of-thought; if needed, regenerate once and stop.
 - Public applyBlueprint blocks do **not** support generic `form`; use `editForm` or `createForm`.
 - For custom `edit` popups with `popup.blocks`, include exactly one `editForm` block.
 - For normal single-page requests, keep exactly one real tab in the blueprint; do not send empty / placeholder tabs or placeholder `markdown` / note / banner blocks unless the user explicitly asked for them.
@@ -37,13 +37,13 @@ Canonical front door is `nb api flow-surfaces`. Use this file for the nb request
 Safe mental model:
 
 1. author the inner business object
-2. send that same prepared object as raw JSON through CLI `--body` / `--body-file`, or use locator flags when the command is bodyless
+2. send that same prepared object through `nb-flow-surfaces.mjs --body` / `--body-file`, or use locator flags when the command is bodyless
 3. do not wrap that object again
 4. never transform the business object into a stringified nested wrapper
 
 Common wrong shapes:
 
-Wrong nb body:
+Wrong wrapper body:
 
 ```json
 {
@@ -54,7 +54,7 @@ Wrong nb body:
 }
 ```
 
-Correct nb body for `configure`:
+Correct body for wrapper `configure`:
 
 ```json
 {
