@@ -21,6 +21,7 @@ NocoBase CLI automatically installs Skills during initialization (`nb init`), so
 | `nocobase-dsl-reconciler`  | **Opt-in** YAML-DSL path for building whole NocoBase applications from spec files committed to git. Use only when explicitly requested.    |
 | `nocobase-plugin-manage`   | List, enable, and disable NocoBase plugins via `nb pm` commands.                                                                           |
 | `nocobase-publish-manage`  | Cross-environment release operations — backup & restore, and migration via `nb` CLI.                                                       |
+| `nocobase-revision`        | Save completed NocoBase app-building milestones as restorable revisions via `nb revision create`.                                          |
 
 ### AI Plugin Development
 
