@@ -89,14 +89,14 @@ Both notations traverse the same association path. Use whichever fits the contex
 
 | Operator | Applies to | Description | Example value |
 |---|---|---|---|
-| `$eq` | any scalar | Equal. If value is an array, behaves as `$in`. | `"active"`, `1`, `null` |
-| `$ne` | any scalar | Not equal. If value is an array, behaves as `$notIn`. Null-safe (also matches null). | `"draft"` |
-| `$gt` | number, date | Greater than | `100` |
-| `$gte` | number, date | Greater than or equal | `100` |
-| `$lt` | number, date | Less than | `100` |
-| `$lte` | number, date | Less than or equal | `100` |
-| `$in` | any scalar | Value is in the given array | `["a", "b"]` |
-| `$notIn` | any scalar | Value is not in the array. Null-safe (also matches null). | `["x", "y"]` |
+| `$eq` | non-date scalar | Equal. If value is an array, behaves as `$in`. | `"active"`, `1`, `null` |
+| `$ne` | non-date scalar | Not equal. If value is an array, behaves as `$notIn`. Null-safe (also matches null). | `"draft"` |
+| `$gt` | number | Greater than | `100` |
+| `$gte` | number | Greater than or equal | `100` |
+| `$lt` | number | Less than | `100` |
+| `$lte` | number | Less than or equal | `100` |
+| `$in` | non-date scalar | Value is in the given array | `["a", "b"]` |
+| `$notIn` | non-date scalar | Value is not in the array. Null-safe (also matches null). | `["x", "y"]` |
 
 ### Null / Empty
 
@@ -140,7 +140,7 @@ Both notations traverse the same association path. Use whichever fits the contex
 
 ### Date Fields
 
-Date operators accept either an ISO date string or a named shortcut string (e.g., `"today"`, `"thisWeek"`, `"lastMonth"`).
+Date fields use only the comparison operators listed below. These operators accept either an ISO date string or a named shortcut string (e.g., `"today"`, `"thisWeek"`, `"lastMonth"`).
 
 | Operator | Description |
 |---|---|
