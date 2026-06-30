@@ -25,7 +25,7 @@ Guide an AI agent through the complete process of developing a NocoBase plugin �
 # Scope
 
 - Analyze user requirements and map them to NocoBase extension points.
-- Scaffold a new plugin with `yarn pm create`.
+- Scaffold a new plugin with `nb scaffold plugin`.
 - Generate server-side code: collections, ACL, custom APIs, migrations, install hooks.
 - Generate client-side code: blocks, fields, actions, settings pages, routes.
 - Generate i18n locale files.
@@ -78,7 +78,7 @@ If the user says "I enabled the plugin but nothing shows up" or hits a 404, the 
 | Input | Required | Default | Validation | Clarification Question |
 |---|---|---|---|---|
 | `requirement` | yes | none | non-empty natural language description | "What should this plugin do?" |
-| `nocobase_root` | yes | current working directory | must contain `package.json` with `@nocobase/server` | "Where is your NocoBase project root directory?" |
+| `nocobase_root` | yes | current working directory | must be a CLI-managed source app (has `source/` directory) or a NocoBase source repo (has `packages/core/`) | "Where is your NocoBase project root directory?" |
 | `plugin_name` | no | derived from requirement | `@<scope>/plugin-<name>` format | "What should the plugin package name be?" |
 
 Rules:
@@ -92,7 +92,7 @@ Rules:
 - Max clarification rounds: `2`
 - Max questions per round: `3`
 - Mutation preconditions:
-  - `nocobase_root` is a valid NocoBase project with `yarn` available.
+  - `nocobase_root` is a valid NocoBase project with `nb` CLI (CLI-managed apps) or `yarn` (plain source repos) available.
   - `requirement` is clear enough to determine which extension points are needed.
   - Functional plan has been confirmed by the user in plain language.
 - If preconditions are not met after two rounds, stop and report what's missing.
@@ -103,11 +103,11 @@ Rules:
 
 ## Step 0: Environment Check
 
-1. Verify `nocobase_root` contains a valid NocoBase project (`package.json` with `@nocobase/server`).
-2. Verify `yarn` is available.
-3. Detect environment type:
-   - **Source install**: `packages/core/` exists → AI can read source code for troubleshooting.
-   - **create-nocobase-app**: no `packages/core/` → rely on documentation and online references only.
+1. Detect environment type:
+   - **CLI-managed source app**: `source/` directory exists (created by `nb init`) → plugins go in `<app-path>/plugins/`, use `nb scaffold plugin` / `nb source build` / `nb plugin enable`.
+   - **Plain source repo**: `packages/core/` exists but no `source/` → plugins go in `packages/plugins/`, use `yarn pm create` / `yarn build` / `yarn pm enable` (legacy flow).
+2. For CLI-managed apps, verify `nb` CLI is available. For plain source repos, verify `yarn` is available.
+3. For CLI-managed apps with Git source (`source/packages/core/` exists), AI can read source code for troubleshooting. For npm source, rely on documentation and online references.
 
 ## Step 1: Requirement Analysis
 
@@ -137,19 +137,29 @@ Present a functional plan in plain language the user can understand. Proactively
 >
 > Does this look right?"
 
-**Do NOT run `yarn pm create` or write any code until the user explicitly confirms.**
+**Do NOT run `nb scaffold plugin` or write any code until the user explicitly confirms.**
 
 ## Step 3: Scaffold Plugin
 
-The exact command is:
+For CLI-managed source apps (recommended):
+
+```bash
+nb scaffold plugin <plugin_name>
+# Example: nb scaffold plugin @nocobase-sample/plugin-hello
+# Creates:  <app-path>/plugins/@nocobase-sample/plugin-hello/
+# nb automatically syncs it to source/packages/plugins/
+```
+
+Run from the project root (`<app-path>`) or from `source/`. You can also use `--cwd <app-path>` to specify the project path explicitly.
+
+For plain source repos (legacy):
 
 ```bash
 yarn pm create <plugin_name>
-# Example: yarn pm create @nocobase-sample/plugin-hello
 # Creates:  packages/plugins/@nocobase-sample/plugin-hello/
 ```
 
-This is the only correct command. Do NOT use `create-plugin`, `generate`, or any other variant. Do NOT look up alternatives — just run it.
+Do NOT use `create-plugin`, `generate`, or any other variant.
 
 Read `references/getting-started.md` for the expected project structure.
 
@@ -205,6 +215,14 @@ Only ask about additional languages if:
 
 ## Step 6: Enable and Verify
 
+For CLI-managed source apps:
+
+```bash
+nb plugin enable <plugin_name>
+```
+
+For plain source repos:
+
 ```bash
 yarn pm enable <plugin_name>
 ```
@@ -234,7 +252,7 @@ When the plugin doesn't work as expected:
 
 ## FAQ Checklist
 
-1. **Plugin not appearing in plugin manager** → In order: (a) browser URL must be `/v2/admin/`, not `/admin/...` — only the v2 plugin manager fetches via `pm:listEnabledV2` and shows v2 plugins; (b) plugin has been enabled with `yarn pm enable <name>`; (c) `package.json` has correct NocoBase metadata.
+1. **Plugin not appearing in plugin manager** → In order: (a) browser URL must be `/v2/admin/`, not `/admin/...` — only the v2 plugin manager fetches via `pm:listEnabledV2` and shows v2 plugins; (b) plugin has been enabled with `nb plugin enable <name>` (CLI-managed apps) or `yarn pm enable <name>` (plain source repos); (c) `package.json` has correct NocoBase metadata.
 2. **Collection not showing in block picker** → Recommend user to add the table via NocoBase UI "Data Source Management". If code-level registration is needed (demo only), use `addCollection` with `filterTargetKey: 'id'` and `eventBus` pattern. See `client/plugin.md`.
 3. **Settings page shows blank** → Verify using `componentLoader` (not `Component`) for client-v2.
 4. **Model not appearing in menus** → Check `define({ label: tExpr('...') })` and `registerModelLoaders` in plugin `load()`.
@@ -244,22 +262,32 @@ When the plugin doesn't work as expected:
 
 ## Source Code Debugging (Source Install Only)
 
-If the environment is a source install, the AI agent may read NocoBase core source code to debug issues:
+If the environment has source code available (CLI-managed Git source app or plain source repo), the AI agent may read NocoBase core source code to debug issues:
+
+For CLI-managed Git source apps:
 
 ```
-packages/core/server/src/          — Server core
-packages/core/client/src/          — Client core (v1, reference only)
-packages/core/client-v2/src/       — Client core (v2, recommended)
-packages/core/database/src/        — Database layer
-packages/core/flow-engine/src/     — FlowEngine
+source/packages/core/server/src/          — Server core
+source/packages/core/client-v2/src/       — Client core (v2, recommended)
+source/packages/core/database/src/        — Database layer
+source/packages/core/flow-engine/src/     — FlowEngine
+```
+
+For plain source repos:
+
+```
+packages/core/server/src/                 — Server core
+packages/core/client-v2/src/              — Client core (v2, recommended)
+packages/core/database/src/               — Database layer
+packages/core/flow-engine/src/            — FlowEngine
 ```
 
 ## Complete Example Plugins
 
 When a full working example is needed:
 
-- **Source install**: Read `packages/plugins/@nocobase-example/` for working example plugins.
-- **Non-source install**: Browse https://github.com/nocobase/nocobase/tree/develop/packages/plugins/%40nocobase-example/
+- **CLI-managed Git source app**: Read `source/packages/plugins/@nocobase-example/` for working example plugins.
+- **Other environments**: Browse https://github.com/nocobase/nocobase/tree/develop/packages/plugins/%40nocobase-example/
 
 # Reference Loading Map
 
@@ -275,8 +303,8 @@ When a full working example is needed:
 
 High-impact actions:
 
-- Running `yarn pm create` (creates files in user's project)
-- Running `yarn pm enable` (modifies database state)
+- Running `nb scaffold plugin` / `yarn pm create` (creates files in user's project)
+- Running `nb plugin enable` / `yarn pm enable` (modifies database state)
 - Modifying existing plugin files (if plugin already exists)
 
 Secondary confirmation template:
@@ -285,21 +313,21 @@ Secondary confirmation template:
 
 Rollback guidance:
 
-- If `yarn pm create` produced wrong scaffold → delete the generated directory and re-run.
-- If plugin code has bugs after enable → fix the code, the plugin can be disabled with `yarn pm disable <name>`.
-- Never run `yarn nocobase install -f` without explicit user confirmation — it resets the database.
+- If `nb scaffold plugin` produced wrong scaffold → delete the generated directory and re-run.
+- If plugin code has bugs after enable → fix the code, the plugin can be disabled with `nb plugin disable <name>`.
+- Never run `nb app upgrade --force` or `yarn nocobase install -f` without explicit user confirmation — they can reset or modify the database.
 
 # Verification Checklist
 
-- NocoBase project root is valid and `yarn` is available.
-- Environment type (source vs create-nocobase-app) is detected.
+- NocoBase project root is valid and the appropriate CLI (`nb` or `yarn`) is available.
+- Environment type (CLI-managed source app vs plain source repo) is detected.
 - User requirement is analyzed and extension points are identified.
 - Functional plan is confirmed by user before code generation.
 - Plugin scaffold is created successfully.
 - All generated files follow NocoBase conventions (client-v2, lazy loading, locale.ts).
 - No `this.app.use()` or React Provider patterns in generated code (Hard Constraint).
 - `zh-CN.json` and `en-US.json` are generated with all translatable strings.
-- Plugin can be enabled with `yarn pm enable` without errors.
+- Plugin can be enabled with `nb plugin enable` (or `yarn pm enable` for plain source repos) without errors.
 - Generated code matches the patterns in reference templates.
 - FAQ checklist is consulted when issues arise.
 

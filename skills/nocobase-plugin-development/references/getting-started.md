@@ -4,6 +4,16 @@ Read this when scaffolding a new plugin (Step 3 of the workflow).
 
 ## Scaffold Command
 
+For CLI-managed source apps (recommended):
+
+```bash
+nb scaffold plugin @my-project/plugin-hello
+```
+
+Run from the project root (`<app-path>`) or from `source/`. This creates the plugin at `<app-path>/plugins/@my-project/plugin-hello/` and automatically syncs it to `source/packages/plugins/`.
+
+For plain source repos (legacy):
+
 ```bash
 yarn pm create @my-project/plugin-hello
 ```
@@ -15,7 +25,9 @@ This creates the plugin at `packages/plugins/@my-project/plugin-hello/`.
 The scaffold creates both `src/client-v2/` and `src/client/` directories. **Only use `src/client-v2/`** — the `src/client/` directory is legacy v1 code and must be ignored.
 
 ```
-packages/plugins/@my-project/plugin-hello/
+# CLI-managed app: <app-path>/plugins/@my-project/plugin-hello/
+# Plain source repo: packages/plugins/@my-project/plugin-hello/
+plugin-hello/
 ├── package.json
 ├── client-v2.d.ts
 ├── client-v2.js
@@ -52,11 +64,19 @@ packages/plugins/@my-project/plugin-hello/
 
 ## Enable Plugin
 
+For CLI-managed source apps:
+
+```bash
+nb plugin enable @my-project/plugin-hello
+```
+
+For plain source repos:
+
 ```bash
 yarn pm enable @my-project/plugin-hello
 ```
 
-After enabling, the plugin appears in the Plugin Manager (typically at `http://localhost:13000/admin/settings/plugin-manager` — adjust the port and base URL to match your environment).
+After enabling, the plugin appears in the Plugin Manager (typically at `http://localhost:13000/v2/admin/settings/plugin-manager` — adjust the port and base URL to match your environment).
 
 ## Deep Reference
 

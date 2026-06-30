@@ -4,6 +4,14 @@ Read this when the user wants to build or distribute the plugin.
 
 ## Build
 
+For CLI-managed source apps:
+
+```bash
+nb source build @my-project/plugin-hello
+```
+
+For plain source repos:
+
 ```bash
 yarn build @my-project/plugin-hello
 ```
@@ -12,13 +20,15 @@ Compiles `src/` to JavaScript — client-v2 code via Rsbuild, server code via ts
 
 ## Package
 
+For CLI-managed source apps, use `--tar` to build and package in one step:
+
 ```bash
-yarn nocobase tar @my-project/plugin-hello
+nb source build @my-project/plugin-hello --tar
 ```
 
-Creates `storage/tar/@my-project/plugin-hello.tar.gz`.
+Creates a `.tgz` file under `storage/tar/`. The command prints the tarball path after completion.
 
-## Build + Package in One Step
+For plain source repos:
 
 ```bash
 yarn build @my-project/plugin-hello --tar
@@ -47,7 +57,7 @@ export default defineConfig({
 
 ## Upload to Another NocoBase Instance
 
-Upload the `.tar.gz` file to the target application's `./storage/plugins` directory.
+Upload the `.tgz` file to the target application's `./storage/plugins` directory.
 
 ## Deep Reference
 
